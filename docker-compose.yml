@@ -1,0 +1,14 @@
+# The frontend is a static build plus an nginx proxy, so it only needs to know
+# where the API is. Run the backend from its own repository first.
+services:
+  frontend:
+    build: .
+    environment:
+      # Where nginx forwards /api. From inside a container, localhost is the
+      # container itself - host.docker.internal reaches the host, and a
+      # hostname works if the backend is on the same docker network.
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:4000}
+    ports:
+      - "8080:80"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
