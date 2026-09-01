@@ -1,11 +1,49 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { StatusDot } from '../components/StatusDot.js';
 import { useEventStream, type StatusUpdate } from '../hooks/useEventStream.js';
 import { api } from '../lib/api.js';
-import type { EventStats, WebhookEvent } from '../lib/types.js';
+import type { EventStats, Subscription, WebhookEvent } from '../lib/types.js';
 
 const MAX_ROWS = 200;
+
+/**
+ * Labels a subscription for the log. The source URL's host is the useful part
+ * - the full URL is too long for a column. When two subscriptions share a
+ * host, the callback's path is appended so they can still be told apart.
+ */
+function buildLabels(subscriptions: Subscription[]): Map<string, string> {
+  const host = (url: string) => {
+    try {
+      return new URL(url).host;
+    } catch {
+      return url;
+    }
+  };
+
+  const counts = new Map<string, number>();
+  for (const s of subscriptions) {
+    const h = host(s.sourceUrl);
+    counts.set(h, (counts.get(h) ?? 0) + 1);
+  }
+
+  const labels = new Map<string, string>();
+  for (const s of subscriptions) {
+    const h = host(s.sourceUrl);
+    let label = h;
+    if ((counts.get(h) ?? 0) > 1) {
+      // Ambiguous host - disambiguate by where it is delivered.
+      try {
+        const cb = new URL(s.callbackUrl);
+        label = `${h} \u2192 ${cb.pathname}`;
+      } catch {
+        label = `${h} \u2192 ${s.id.slice(0, 8)}`;
+      }
+    }
+    labels.set(s.id, label);
+  }
+  return labels;
+}
 
 function time(iso: string): string {
   const d = new Date(iso);
@@ -19,7 +57,28 @@ function time(iso: string): string {
 export function EventLog() {
   const [events, setEvents] = useState<WebhookEvent[]>([]);
   const [stats, setStats] = useState<EventStats | null>(null);
-  const [statusFilter, setStatusFilter] = useState('');
+  // Filters live in the URL rather than in component state, so a filtered
+  // view can be linked to - the event detail page links back to "all events
+  // for this subscription" - and survives a refresh.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = searchParams.get('status') ?? '';
+  const subscriptionFilter = searchParams.get('subscriptionId') ?? '';
+
+  const setFilter = useCallback(
+    (key: 'status' | 'subscriptionId', value: string) => {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          if (value) next.set(key, value);
+          else next.delete(key);
+          return next;
+        },
+        { replace: true },
+      );
+    },
+    [setSearchParams],
+  );
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [loading, setLoading] = useState(true);
   // Which rows should animate, and how. A new arrival fades in; an existing
   // row whose status changed only flashes its left edge.
@@ -29,13 +88,24 @@ export function EventLog() {
     setStats(await api<EventStats>('/events/stats').catch(() => null));
   }, []);
 
+  // Loaded once so every row can be labelled with the subscription it came
+  // from - including rows pushed over SSE, which carry only a subscription id.
   useEffect(() => {
-    const query = statusFilter ? `?status=${statusFilter}&limit=200` : '?limit=200';
-    api<WebhookEvent[]>(`/events${query}`)
+    api<Subscription[]>('/subscriptions').then(setSubscriptions).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams({ limit: '200' });
+    if (statusFilter) params.set('status', statusFilter);
+    if (subscriptionFilter) params.set('subscriptionId', subscriptionFilter);
+
+    api<WebhookEvent[]>(`/events?${params.toString()}`)
       .then(setEvents)
       .finally(() => setLoading(false));
     void loadStats();
-  }, [statusFilter, loadStats]);
+  }, [statusFilter, subscriptionFilter, loadStats]);
+
+  const labels = useMemo(() => buildLabels(subscriptions), [subscriptions]);
 
   const markLive = useCallback((id: string, kind: 'in' | 'touch') => {
     setLive((prev) => new Map(prev).set(id, kind));
@@ -86,9 +156,13 @@ export function EventLog() {
     ),
   });
 
-  const shown = statusFilter
-    ? events.filter((e) => e.deliveryStatus === statusFilter)
-    : events;
+  // SSE pushes every event for this user regardless of the active filter, so
+  // the same filter is applied client-side to keep the view consistent.
+  const shown = events.filter(
+    (e) =>
+      (!statusFilter || e.deliveryStatus === statusFilter) &&
+      (!subscriptionFilter || e.subscriptionId === subscriptionFilter),
+  );
 
   return (
     <div className="space-y-6">
@@ -104,9 +178,22 @@ export function EventLog() {
         </span>
 
         <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
+          value={subscriptionFilter}
+          onChange={(e) => setFilter('subscriptionId', e.target.value)}
           className="ml-auto rounded border border-line bg-surface px-2 py-1 text-sm text-muted outline-none focus:border-accent"
+        >
+          <option value="">All subscriptions</option>
+          {subscriptions.map((s) => (
+            <option key={s.id} value={s.id}>
+              {labels.get(s.id) ?? s.sourceUrl}
+            </option>
+          ))}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={(e) => setFilter('status', e.target.value)}
+          className="rounded border border-line bg-surface px-2 py-1 text-sm text-muted outline-none focus:border-accent"
         >
           <option value="">All statuses</option>
           {['pending', 'delivering', 'delivered', 'failed', 'dead', 'filtered'].map((s) => (
@@ -128,13 +215,14 @@ export function EventLog() {
       )}
 
       <div className="overflow-x-auto rounded border border-line">
-        <div className="min-w-[720px]">
+        <div className="min-w-[900px]">
           <div className="flex gap-4 border-b border-line bg-surface px-4 py-2 font-mono text-[10px] uppercase tracking-wider text-faint">
             <span className="w-28">time</span>
+            <span className="w-44">source</span>
             <span className="flex-1">event type</span>
             <span className="w-28">status</span>
             <span className="w-16 text-right">attempts</span>
-            <span className="w-64">last error</span>
+            <span className="w-52">last error</span>
           </div>
 
           {loading ? (
@@ -157,12 +245,15 @@ export function EventLog() {
                 }`}
               >
                 <span className="w-28 text-faint">{time(e.receivedAt)}</span>
+                <span className="w-44 truncate text-muted">
+                  {labels.get(e.subscriptionId) ?? '-'}
+                </span>
                 <span className="flex-1 truncate text-text">{e.eventType}</span>
                 <span className="w-28">
                   <StatusDot status={e.deliveryStatus} />
                 </span>
                 <span className="w-16 text-right text-muted">{e.retryCount}</span>
-                <span className="w-64 truncate text-faint">{e.lastError ?? ''}</span>
+                <span className="w-52 truncate text-faint">{e.lastError ?? ''}</span>
               </Link>
             ))
           )}

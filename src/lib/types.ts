@@ -24,6 +24,7 @@ export interface WebhookEvent {
   id: string;
   subscriptionId: string;
   sourceUrl?: string;
+  callbackUrl?: string;
   eventType: string;
   receivedAt: string;
   deliveryStatus: DeliveryStatus;

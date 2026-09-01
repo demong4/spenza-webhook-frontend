@@ -43,6 +43,22 @@ export function EventDetail() {
         </Field>
       </dl>
 
+      {/* Two subscriptions can share a source URL, so the callback is what
+          actually identifies which one this event belongs to. */}
+      <dl className="grid gap-px overflow-hidden rounded border border-line bg-line sm:grid-cols-2">
+        <Field label="delivered to">
+          <span className="truncate">{event.callbackUrl ?? '-'}</span>
+        </Field>
+        <Field label="subscription">
+          <Link
+            to={`/events?subscriptionId=${event.subscriptionId}`}
+            className="truncate text-accent hover:underline"
+          >
+            {event.subscriptionId.slice(0, 8)} - view all its events
+          </Link>
+        </Field>
+      </dl>
+
       <section>
         <h2 className="mb-3 text-sm text-text">Delivery attempts</h2>
         {event.attempts.length === 0 ? (
