@@ -1,0 +1,102 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Tailwind v4 reads these from @theme and generates the
+ * matching utilities, so `bg-canvas` or `text-muted` work like built-ins.
+ *
+ * The palette is deliberately narrow: a near-black canvas, three greys, and
+ * one amber accent. Status colours are semantic - they carry meaning, so they
+ * are the only other colours allowed.
+ */
+@theme {
+  --color-canvas: #0b0c0e;
+  --color-surface: #141618;
+  --color-raised: #1b1e21;
+  --color-line: #232629;
+  --color-line-bright: #32363a;
+
+  --color-text: #e6e8ea;
+  --color-muted: #8b9298;
+  --color-faint: #5c6368;
+
+  --color-accent: #e8b339;
+  --color-accent-dim: #7a5e1d;
+
+  --color-ok: #4ade80;
+  --color-warn: #e8b339;
+  --color-bad: #f87171;
+  --color-dead: #a78bfa;
+
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+/*
+ * Two separate cues, because they mean different things.
+ *
+ * row-in: a brand new row arriving - it fades up from nothing.
+ * row-touch: an existing row whose status changed - only the left edge
+ * flashes. Re-running the fade here would read as the row flickering out
+ * and back, which looks like a bug rather than an update.
+ */
+@keyframes row-in {
+  from {
+    opacity: 0;
+    border-left-color: var(--color-accent);
+  }
+  to {
+    opacity: 1;
+    border-left-color: transparent;
+  }
+}
+
+@keyframes row-touch {
+  from {
+    border-left-color: var(--color-accent);
+  }
+  to {
+    border-left-color: transparent;
+  }
+}
+
+.row-in {
+  animation: row-in 700ms ease-out;
+}
+
+.row-touch {
+  animation: row-touch 900ms ease-out;
+}
+
+/* Respect a reader who has asked the OS for less movement. */
+@media (prefers-reduced-motion: reduce) {
+  .row-in,
+  .row-touch {
+    animation: none;
+  }
+}
+
+/* The native dropdown arrow renders light-on-light in a dark page. */
+select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--color-muted) 50%),
+    linear-gradient(135deg, var(--color-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% + 1px),
+    calc(100% - 9px) calc(50% + 1px);
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 28px;
+}
+
+::selection {
+  background: var(--color-accent-dim);
+}
