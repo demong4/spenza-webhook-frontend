@@ -4,15 +4,25 @@ React frontend for the webhook subscription and delivery service. Sign up,
 create subscriptions, and watch incoming events and their delivery attempts
 update live.
 
-Built for the Spenza code test. The **backend lives in a separate repository**,
-as the assignment asks — start it first, since everything here talks to its
-API.
+Built for the Spenza code test. The backend lives in a separate repository, as
+the assignment asks: **[spenza-webhook-backend](https://github.com/demong4/spenza-webhook-backend)**. Start that first —
+everything here talks to its API.
 
 ---
 
 ## Quick start
 
-The backend must be running and reachable on **http://localhost:4000**.
+The backend must be running and reachable on **http://localhost:4000**:
+
+```bash
+git clone https://github.com/demong4/spenza-webhook-backend.git
+cd spenza-webhook-backend
+cp .env.example .env
+sed -i "s|^JWT_SECRET=$|JWT_SECRET=$(openssl rand -hex 32)|" .env
+docker compose up -d --build
+```
+
+Then, in this repository:
 
 ```bash
 npm install
