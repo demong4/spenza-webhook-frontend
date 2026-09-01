@@ -11,6 +11,7 @@ export interface Subscription {
   sourceUrl: string;
   callbackUrl: string;
   eventTypes: string[];
+  requireSignature: boolean;
   status: 'active' | 'cancelled';
   createdAt: string;
   cancelledAt: string | null;

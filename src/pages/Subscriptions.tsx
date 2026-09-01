@@ -11,6 +11,7 @@ export function Subscriptions() {
   const [sourceUrl, setSourceUrl] = useState('https://api.stripe.com');
   const [callbackUrl, setCallbackUrl] = useState('http://localhost:5001/ok');
   const [eventTypes, setEventTypes] = useState('');
+  const [requireSignature, setRequireSignature] = useState(false);
   const [creating, setCreating] = useState(false);
 
   // The secret is only ever returned once, at creation. Held here so it can
@@ -46,6 +47,7 @@ export function Subscriptions() {
         body: JSON.stringify({
           sourceUrl,
           callbackUrl,
+          requireSignature,
           ...(types.length > 0 ? { eventTypes: types } : {}),
         }),
       });
@@ -129,6 +131,23 @@ export function Subscriptions() {
           </span>
         </label>
 
+        <label className="flex items-start gap-2 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={requireSignature}
+            onChange={(e) => setRequireSignature(e.target.checked)}
+            className="mt-0.5 accent-accent"
+          />
+          <span className="text-xs text-muted">
+            Require a signature on incoming events
+            <span className="mt-0.5 block text-faint">
+              Rejects any event without a valid{' '}
+              <code className="font-mono">X-Webhook-Signature</code> header. The sender
+              must HMAC-SHA256 the request body with the signing secret below.
+            </span>
+          </span>
+        </label>
+
         <div className="sm:col-span-2">
           <button
             type="submit"
@@ -178,6 +197,11 @@ export function Subscriptions() {
                     {s.status}
                   </span>
                   <span className="text-xs text-faint">{s.eventCount ?? 0} events</span>
+                  {s.requireSignature && (
+                    <span className="rounded bg-accent/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wider text-accent">
+                      signed
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-baseline gap-2 text-xs">
